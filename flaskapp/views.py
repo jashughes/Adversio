@@ -84,51 +84,43 @@ def result():
     #Use model to predict each side effect
 
 
+    #Given the models we made above, predict output for user-provided features
+    #Use model to predict each side effect
+
+    with open('SideEffects.pickle', 'rb') as f:
+        sideeffects = pickle.load(f)
+
     #Initialize predictions
     cols = ['Model1','Model2','Model3','Model4','Model5']
 
-    preds_nausea = pd.DataFrame(index = drugs, columns = cols)
-    preds_fever = pd.DataFrame(index = drugs, columns = cols)
-    preds_dyspnoea = pd.DataFrame(index = drugs, columns = cols)
-    preds_rash = pd.DataFrame(index = drugs, columns = cols)
-    preds_vomiting = pd.DataFrame(index =  drugs, columns = cols)
+    preds = pd.DataFrame(index = drugs, columns = cols)
+    y = pd.DataFrame(index = drugs, columns = sideeffects)
     m_number = 0
 
-    #Loop through models
-    for m_number in range(0,len(cols)):
-        #Pre-process feature input.
-        with open(os.path.join(filepath, "models", 'poly_%s.pickle' % m_number), 'rb') as f:
-            poly = pickle.load(f)
-        with open(os.path.join(filepath, "models", 'sfm_%s.pickle' % m_number), 'rb') as f:
-            sfm = pickle.load(f)
-        with open(os.path.join(filepath, "models", 'Targets.pickle'), 'rb') as f:
-            targets = pickle.load(f)
-        X_test_new = pd.DataFrame(poly.fit_transform(X_test))
-        X_test_new.columns = poly.get_feature_names(targets)
-        X_test_transform = pd.DataFrame(sfm.transform(X_test_new))
-        X_test_transform.columns = X_test_new.columns[sfm.get_support()]
+    for SE in sideeffects:
+        m_number = 0
 
-        #Open model and predict each side effects
-        with open(os.path.join(filepath, "models",'LogisticRegression_%s.pickle' % m_number), 'rb') as f:
-            model = pickle.load(f)
+        #Loop through models & predict probability
+        for m_number in range(0,len(cols)):
+            #Pre-process feature input.
+            with open('poly_%s_%s.pickle' % (m_number,SE), 'rb') as f:
+                poly = pickle.load(f)
+            with open('sfm_%s_%s.pickle' % (m_number,SE), 'rb') as f:
+                sfm = pickle.load(f)
+            with open('Targets.pickle', 'rb') as f:
+                targets = pickle.load(f)
+            X_test_new = pd.DataFrame(poly.fit_transform(X_test))
+            X_test_new.columns = poly.get_feature_names(targets)
+            X_test_transform = pd.DataFrame(sfm.transform(X_test_new))
+            X_test_transform.columns = X_test_new.columns[sfm.get_support()]
 
-        preds_nausea.iloc[:,m_number] = pd.DataFrame(model.predict_proba(X_test_transform)).iloc[:,0].values
-        preds_fever.iloc[:,m_number] = pd.DataFrame(model.predict_proba(X_test_transform)).iloc[:,1].values
-        preds_dyspnoea.iloc[:,m_number] = pd.DataFrame(model.predict_proba(X_test_transform)).iloc[:,2].values
-        preds_rash.iloc[:,m_number] = pd.DataFrame(model.predict_proba(X_test_transform)).iloc[:,3].values
-        preds_vomiting.iloc[:,m_number] = pd.DataFrame(model.predict_proba(X_test_transform)).iloc[:,4].values
-        m_number = m_number + 1
+            #Open model and predict each side effects
+            with open('LogisticRegression_%s_%s.pickle' % (m_number,SE), 'rb') as f:
+                model = pickle.load(f)
 
-    #Combine model predictions into output prediction matrix.
-    #Initialize matrix
-    y=[]
-    y = pd.DataFrame(index = X_test.index, columns = sideeffects.iloc[:,0])
-    preds = [preds_nausea, preds_fever, preds_dyspnoea, preds_rash, preds_vomiting]
-    index = 0
-
-    for prd in preds:
-        y.iloc[:,index] = prd.median(axis = 1)
-        index += 1
+            preds.iloc[:,m_number] = pd.DataFrame(model.predict_proba(X_test_transform)).iloc[:,1].values
+            m_number = m_number + 1
+        y.loc[:,SE] = preds.mean(axis = 1)
 
     #Determine best performers
     y_clf = y.copy(deep = True)
